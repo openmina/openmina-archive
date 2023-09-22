@@ -1,14 +1,20 @@
 {
     "cSpell.words": [
         "Behaviour",
+        "binprot",
+        "Coinbases",
         "Deque",
+        "Keypair",
         "libp2p",
         "mina",
         "Multiaddr",
         "muxing",
         "openmina",
+        "rampup",
+        "rocksdb",
         "rpcs",
         "snarked",
+        "structopt",
         "Substream"
     ]
 }

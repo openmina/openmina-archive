@@ -4,3 +4,18 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+structopt = { version = "0.3.26" }
+thiserror = { version = "1.0" }
+log = { version = "0.4.20" }
+env_logger = { version = "0.10.0" }
+
+bs58 = { version = "0.5.0", features = ["check"] }
+rand = { version = "0.8.5" }
+
+rocksdb = { version = "0.21" }
+tokio = { version = "1.32.0", features = ["rt-multi-thread"] }
+libp2p = { git = "https://github.com/openmina/rust-libp2p.git", branch = "webrtc-v0.51.3", default-features = false, features = ["macros", "tokio", "gossipsub", "tcp", "noise", "pnet", "yamux", "dns"] }
+binprot = { git = "https://github.com/openmina/binprot-rs", rev = "dfbd3bbda8b2681d86ac73065523c658ee31d45d" }
+mina-p2p-messages = { git = "https://github.com/openmina/mina-p2p-messages-rs", features = ["hashing"], rev = "e989a8957db0bde6007a8aceb39db409a9b0a308" }
+libp2p-rpc-behaviour = { git = "https://github.com/vlad9486/openmina-poc", branch = "docker" }
+mina-transport = { git = "https://github.com/vlad9486/openmina-poc", branch = "docker" }

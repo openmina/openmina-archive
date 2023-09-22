@@ -68,3 +68,13 @@ To do this we need snarked ledger, `staged_ledger_aux_and_pending_coinbase` at s
 To test further, we should bootstrap the chain from any point. For this we need a snarked ledger and `staged_ledger_aux_and_pending_coinbase` at any `blockchain_length`.
 
 To reduce database size, we may need to introduce snarked ledger diff, which is the list of changed accounts. This way, we can store all ledgers on all blocks and use less database space.
+
+## Reliability
+
+The archive tool must be running and connected to peers. However it is allowed to pause for a certain amount of time, let's call it `offline_time`. Peers are required to keep $n$ last blocks where the snarked ledger is not yet finalized.
+
+```offline_time = block_time * n - bootstrap_time```
+
+For Berkeley testnet `block_time` is 180 seconds, `n` is 290 and `bootstrap_time` is (in worst case) 1800 seconds. So `offline_time` is around 14 hours.
+
+If the archive tool has crashed or lost connection for any reason, it must be fixed in 14 hours.
