@@ -18,19 +18,17 @@ use mina_p2p_messages::{
 
 use thiserror::Error;
 
-use crate::main_loop::BEvent;
-
-use super::main_loop::B;
+use super::main_loop::{B, BEvent};
 
 pub type TSwarm = Swarm<B>;
 pub type TSwarmEvent = SwarmEvent<BEvent, THandlerErr<B>>;
 
 pub struct Client<S> {
-    swarm: S,
+    pub swarm: S,
     peer: Option<PeerId>,
     stream: Option<StreamId>,
     id: i64,
-    tx: mpsc::UnboundedSender<TSwarmEvent>,
+    pub tx: mpsc::UnboundedSender<TSwarmEvent>,
 }
 
 #[derive(Debug, Error)]
@@ -54,12 +52,6 @@ where
             stream: None,
             id: 1,
             tx,
-        }
-    }
-
-    pub async fn done(mut self) {
-        while let Some(event) = self.swarm.next().await {
-            self.tx.send(event).unwrap_or_default();
         }
     }
 

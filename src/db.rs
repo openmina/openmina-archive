@@ -34,10 +34,8 @@ pub enum DbError {
 }
 
 pub enum BlockId {
-    Earliest,
     Latest,
-    PositionForward(u32),
-    PositionBackward(u32),
+    Forward(u32),
 }
 
 pub trait BlockHeader {
@@ -89,8 +87,6 @@ impl Db {
             ColumnFamilyDescriptor::new("block", Default::default()),
             // u32 -> Vec<v2::StateHash>
             ColumnFamilyDescriptor::new("block_hash_by_height", Default::default()),
-            // v2::StateHash -> u32
-            ColumnFamilyDescriptor::new("block_height_by_hash", Default::default()),
             // u32
             ColumnFamilyDescriptor::new("root", Default::default()),
         ];
@@ -124,21 +120,16 @@ impl Db {
         &self,
         id: BlockId,
     ) -> impl Iterator<Item = Result<(u32, Vec<v2::StateHash>), DbError>> + '_ {
-        let cf_handle: &rocksdb::ColumnFamily = self
+        let cf_handle = self
             .inner
             .cf_handle("block_hash_by_height")
             .expect("must exist");
         let pos_bytes;
         let mode = match id {
-            BlockId::Earliest => rocksdb::IteratorMode::Start,
             BlockId::Latest => rocksdb::IteratorMode::End,
-            BlockId::PositionForward(pos) => {
+            BlockId::Forward(pos) => {
                 pos_bytes = pos.to_be_bytes();
                 rocksdb::IteratorMode::From(&pos_bytes, rocksdb::Direction::Forward)
-            }
-            BlockId::PositionBackward(pos) => {
-                pos_bytes = pos.to_be_bytes();
-                rocksdb::IteratorMode::From(&pos_bytes, rocksdb::Direction::Reverse)
             }
         };
         self.inner.iterator_cf(cf_handle, mode).map(|x| {
@@ -240,14 +231,14 @@ impl Db {
                 hashes.clone()
             }
             _ => {
-                cache.hashes_at_height = None;
                 let mut hashes = self
-                    .block(BlockId::PositionForward(height))
+                    .block(BlockId::Forward(height))
                     .next()
                     .transpose()?
-                    .map(|(_, hashes)| hashes)
+                    .and_then(|(h, hashes)| if height == h { Some(hashes) } else { None })
                     .unwrap_or_default();
                 hashes.push(hash.clone());
+                cache.hashes_at_height = Some((height, hashes.clone()));
                 hashes
             }
         };
@@ -263,13 +254,13 @@ impl Db {
             .cf_handle("block_hash_by_height")
             .expect("must exist");
         self.inner.put_cf(cf, height.to_be_bytes(), key.clone())?;
-        let cf = self
-            .inner
-            .cf_handle("block_height_by_hash")
-            .expect("must exist");
-        self.inner.put_cf(cf, hash.as_ref(), height.to_be_bytes())?;
+
+        let mut key = vec![];
+        hash.binprot_write(&mut key).unwrap();
 
         let cf = self.inner.cf_handle("block").expect("must exist");
-        self.inner.put_cf(cf, key, value).map_err(Into::into)
+        self.inner.put_cf(cf, key, value.clone())?;
+
+        Ok(())
     }
 }

@@ -8,6 +8,7 @@ mod db;
 mod main_loop;
 mod client;
 mod snarked_ledger;
+mod bootstrap;
 
 use std::{path::PathBuf, env, sync::Arc};
 
@@ -31,6 +32,8 @@ struct Args {
     listen: Vec<Multiaddr>,
     #[structopt(long)]
     peer: Vec<Multiaddr>,
+    #[structopt(long)]
+    head: String,
 }
 
 #[tokio::main]
@@ -42,6 +45,7 @@ async fn main() {
         chain_id,
         listen,
         peer,
+        head,
     } = Args::from_args();
 
     let sk = env::var("OPENMINA_P2P_SEC_KEY")
@@ -69,7 +73,7 @@ async fn main() {
     );
 
     let db = Arc::new(db::Db::open(path).unwrap());
-    if let Err(err) = main_loop::run(swarm, db).await {
+    if let Err(err) = main_loop::run(swarm, db, head).await {
         log::error!("fatal: {err}");
     }
 }

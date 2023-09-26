@@ -24,6 +24,7 @@ mina-transport = { git = "https://github.com/vlad9486/openmina-poc", branch = "d
 mina-tree = { git = "https://github.com/openmina/ledger", branch = "rampup4" }
 vru-cancel = { version = "0.1.2" }
 
+mina-signer = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes-rampup4" }
 
 [patch.crates-io]
 ark-ff = { git = "https://github.com/openmina/algebra", branch = "openmina" }

@@ -2920,6 +2920,7 @@ dependencies = [
  "libp2p-rpc-behaviour",
  "log",
  "mina-p2p-messages",
+ "mina-signer",
  "mina-transport",
  "mina-tree",
  "rand 0.8.5",
