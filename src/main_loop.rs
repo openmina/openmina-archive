@@ -1,6 +1,5 @@
-use std::{sync::Arc, borrow::Cow, ops::DerefMut, thread};
+use std::{sync::Arc, ops::DerefMut};
 
-use binprot::BinProtRead;
 use libp2p::{
     swarm::{NetworkBehaviour, SwarmEvent, THandlerErr},
     Swarm, gossipsub,
@@ -16,9 +15,8 @@ use mina_p2p_messages::v2;
 
 use super::{
     client::Client,
-    db::{Db, DbError, BlockHeader, BlockId},
+    db::{Db, DbError, BlockHeader},
     snarked_ledger::SnarkedLedger,
-    bootstrap,
 };
 
 #[derive(NetworkBehaviour)]
@@ -66,12 +64,11 @@ pub async fn bootstrap(
         + Stream<Item = SwarmEvent<BEvent, THandlerErr<B>>>
         + DerefMut<Target = Swarm<B>>,
     db: Arc<Db>,
-    tx: mpsc::UnboundedSender<SwarmEvent<BEvent, THandlerErr<B>>>,
-    head: Option<String>,
+    mut crx: mpsc::UnboundedReceiver<v2::StateHash>,
 ) -> Result<(), DbError> {
     use mina_p2p_messages::rpc;
 
-    let mut client = Client::new(swarm, tx);
+    let mut client = Client::new(swarm, db.clone());
 
     if db.root().is_none() {
         let best_tip = client.rpc::<rpc::GetBestTipV2>(()).await.unwrap().unwrap();
@@ -123,89 +120,60 @@ pub async fn bootstrap(
     }
 
     // TODO:
-    thread::spawn({
+    std::thread::spawn({
         let db = db.clone();
         move || {
             log::info!("test...");
-            bootstrap::again(db).unwrap();
+            super::bootstrap::again(db).unwrap();
         }
     });
 
-    let (_, head_hashes) = db.block(BlockId::Latest).next().unwrap()?;
-
-    if let Some(head) = head {
-        let true_head = serde_json::from_str::<v2::StateHash>(&format!("\"{head}\"")).unwrap();
-        let mut prev = true_head;
-        while !head_hashes.contains(&prev) {
-            let blocks = client
-                .rpc::<rpc::GetTransitionChainV2>(vec![prev.inner().0.clone()])
-                .await
-                .unwrap()
-                .unwrap();
-            let block = blocks[0].clone();
-            log::info!("catchup {}", block.height());
-            let new = block.header.protocol_state.previous_state_hash.clone();
-            db.put_block(prev, block)?;
-            prev = new;
+    loop {
+        tokio::select! {
+            event = client.swarm.next() => {
+                if let Some(event) = event {
+                    client.process(event);
+                } else {
+                    break;
+                }
+            }
+            command = crx.recv() => {
+                if let Some(hash) = command {
+                    log::info!("fetching {hash}");
+                    let block = client.rpc::<rpc::GetTransitionChainV2>(vec![hash.clone().into_inner().0])
+                        .await
+                        .unwrap()
+                        .unwrap()
+                        .first()
+                        .unwrap()
+                        .clone();
+                    log::info!("adding {hash}");
+                    db.put_block(hash, block).unwrap();
+                }
+            }
         }
-    }
-
-    while let Some(event) = client.swarm.next().await {
-        client.tx.send(event).unwrap_or_default();
     }
 
     Ok(())
 }
 
-pub async fn run(swarm: Swarm<B>, db: Arc<Db>, head: Option<String>) -> Result<(), DbError> {
-    let (tx, mut rx) = mpsc::unbounded_channel();
-
+pub async fn run(
+    swarm: Swarm<B>,
+    db: Arc<Db>,
+    crx: mpsc::UnboundedReceiver<v2::StateHash>,
+) -> Result<(), DbError> {
     let trigger = Canceler::spawn({
         let db = db.clone();
         move |canceler| {
             tokio::spawn(async move {
                 cancelable!(swarm, canceler);
-                bootstrap(swarm, db.clone(), tx, head).await
+                bootstrap(swarm, db.clone(), crx).await
             })
         }
     });
 
-    let ctrlc = tokio::spawn(async move {
-        signal::ctrl_c().await.expect("failed to wait ctrlc");
-        println!(" ... terminating");
+    signal::ctrl_c().await.expect("failed to wait ctrlc");
+    println!(" ... terminating");
 
-        trigger().await.unwrap()
-    });
-
-    while let Some(event) = rx.recv().await {
-        match event {
-            SwarmEvent::Behaviour(BEvent::Gossip(gossipsub::Event::Message {
-                message: gossipsub::Message { source, data, .. },
-                ..
-            })) => {
-                if data.len() > 8 && data[8] == 0 {
-                    let source = source
-                        .as_ref()
-                        .map(ToString::to_string)
-                        .map(Cow::Owned)
-                        .unwrap_or_else(|| "unknown".into());
-                    let mut slice = &data[9..];
-                    let block = match v2::MinaBlockBlockStableV2::binprot_read(&mut slice) {
-                        Ok(v) => v,
-                        Err(err) => {
-                            log::warn!("recv bad block: {err}");
-                            continue;
-                        }
-                    };
-                    let height = block.height();
-                    let hash = block.hash();
-                    log::info!("block {height} {hash} from {source}");
-                    db.put_block(hash, block)?;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    ctrlc.await.unwrap()
+    trigger().await.unwrap()
 }

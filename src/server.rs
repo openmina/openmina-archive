@@ -1,18 +1,20 @@
 use std::sync::Arc;
 
+use mina_p2p_messages::v2;
+
 use warp::{
     Filter, Rejection, Reply,
     reply::{WithStatus, Json, self},
     http::StatusCode,
 };
 
-use tokio::signal;
+use tokio::{signal, sync::mpsc};
 
 use super::db::{Db, BlockId};
 
-pub fn spawn(db: Arc<Db>, port: u16) {
+pub fn spawn(db: Arc<Db>, port: u16, tx: mpsc::UnboundedSender<v2::StateHash>) {
     let (addr, server) =
-        warp::serve(routes(db)).bind_with_graceful_shutdown(([0; 4], port), async move {
+        warp::serve(routes(db, tx)).bind_with_graceful_shutdown(([0; 4], port), async move {
             signal::ctrl_c().await.unwrap_or_default();
         });
     log::info!("running server on {addr}");
@@ -21,6 +23,7 @@ pub fn spawn(db: Arc<Db>, port: u16) {
 
 fn routes(
     db: Arc<Db>,
+    tx: mpsc::UnboundedSender<v2::StateHash>,
 ) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone + Sync + Send + 'static {
     use warp::reply::with;
 
@@ -98,10 +101,23 @@ fn routes(
             reply::with_status(reply::json(&()), StatusCode::OK)
         });
 
+    let append = warp::path!("append" / String).and(warp::get()).map({
+        let tx = tx.clone();
+        move |hash| -> WithStatus<Json> {
+            if let Ok(hash) = serde_json::from_str(&format!("\"{hash}\"")) {
+                tx.send(hash).unwrap_or_default();
+                reply::with_status(reply::json(&"enqueued"), StatusCode::OK)
+            } else {
+                reply::with_status(reply::json(&()), StatusCode::BAD_REQUEST)
+            }
+        }
+    });
+
     version
         .or(root)
         .or(blocks)
         .or(test)
+        .or(append)
         .with(with::header("Content-Type", "application/json"))
         .with(cors_filter)
 }

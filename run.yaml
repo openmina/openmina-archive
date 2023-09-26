@@ -28,10 +28,10 @@ spec:
     spec:
       containers:
         - name: openmina-archive
-          image: vladsimplestakingcom/openmina-archive:0.3
+          image: vladsimplestakingcom/openmina-archive:0.4
           command: ["sh", "-c"]
           args:
-            - openmina-archive --chain-id=3c41383994b87449625df91769dff7b507825c064287d30fada9286f3f1cb15e --path=/database --listen=/ip4/0.0.0.0/tcp/8302 --peer=/ip4/65.21.123.88/tcp/8302/p2p/12D3KooWLKSM9oHWU7qwL7Ci75wunkjXpRmK6j5xq527zGw554AF --http 9000
+            - openmina-archive --chain-id=3c41383994b87449625df91769dff7b507825c064287d30fada9286f3f1cb15e --path=/database --listen=/ip4/0.0.0.0/tcp/8302 --http 9000
           env:
             - name: RUST_LOG
               value: info

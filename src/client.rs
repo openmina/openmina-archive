@@ -1,12 +1,12 @@
-use std::ops::DerefMut;
+use std::{ops::DerefMut, borrow::Cow, sync::Arc};
 
-use tokio::sync::mpsc;
 use libp2p::{
     Swarm,
     futures::StreamExt,
     swarm::{SwarmEvent, THandlerErr},
     PeerId,
     futures::Stream,
+    gossipsub::Message,
 };
 use libp2p_rpc_behaviour::{Event, StreamId, Received};
 
@@ -14,9 +14,12 @@ use binprot::BinProtRead;
 use mina_p2p_messages::{
     rpc_kernel::{self, RpcMethod, ResponseHeader, ResponsePayload, QueryHeader},
     rpc::GetBestTipV2,
+    v2,
 };
 
 use thiserror::Error;
+
+use crate::db::{BlockHeader, Db};
 
 use super::main_loop::{B, BEvent};
 
@@ -28,7 +31,7 @@ pub struct Client<S> {
     peer: Option<PeerId>,
     stream: Option<StreamId>,
     id: i64,
-    pub tx: mpsc::UnboundedSender<TSwarmEvent>,
+    db: Arc<Db>,
 }
 
 #[derive(Debug, Error)]
@@ -45,13 +48,13 @@ impl<S> Client<S>
 where
     S: Unpin + Stream<Item = TSwarmEvent> + DerefMut<Target = TSwarm>,
 {
-    pub fn new(swarm: S, tx: mpsc::UnboundedSender<TSwarmEvent>) -> Self {
+    pub fn new(swarm: S, db: Arc<Db>) -> Self {
         Client {
             swarm,
             peer: None,
             stream: None,
             id: 1,
-            tx,
+            db,
         }
     }
 
@@ -141,7 +144,41 @@ where
                         }
                     }
                 },
-                event => self.tx.send(event).unwrap_or_default(),
+                event => {
+                    self.process(event);
+                }
+            }
+        }
+    }
+
+    pub fn process(&mut self, event: TSwarmEvent) {
+        if let SwarmEvent::Behaviour(BEvent::Gossip(libp2p::gossipsub::Event::Message {
+            propagation_source,
+            message: Message { source, data, .. },
+            ..
+        })) = &event
+        {
+            self.peer = Some(propagation_source.clone());
+            self.stream = Some(StreamId::Outgoing(1));
+
+            if data.len() > 8 && data[8] == 0 {
+                let source = source
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .map(Cow::Owned)
+                    .unwrap_or_else(|| "unknown".into());
+                let mut slice = &data[9..];
+                let block = match v2::MinaBlockBlockStableV2::binprot_read(&mut slice) {
+                    Ok(v) => v,
+                    Err(err) => {
+                        log::warn!("recv bad block: {err}");
+                        return;
+                    }
+                };
+                let height = block.height();
+                let hash = block.hash();
+                log::info!("block {height} {hash} from {source}");
+                self.db.put_block(hash, block).unwrap();
             }
         }
     }

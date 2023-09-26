@@ -142,6 +142,24 @@ impl Db {
         })
     }
 
+    #[allow(dead_code)]
+    pub fn remove_block(&self, height: u32) {
+        let cf = self
+            .inner
+            .cf_handle("block_hash_by_height")
+            .expect("must exist");
+        if let Ok(Some(v)) = self.inner.get_cf(cf, height.to_be_bytes()) {
+            let block_cf = self.inner.cf_handle("block").expect("must exist");
+            let mut s = v.as_slice();
+            for hash in Vec::<v2::StateHash>::binprot_read(&mut s).unwrap() {
+                let mut key = vec![];
+                hash.binprot_write(&mut key).unwrap();
+                self.inner.delete_cf(block_cf, &key).unwrap();
+            }
+            self.inner.delete_cf(cf, height.to_be_bytes()).unwrap();
+        }
+    }
+
     pub fn block_full(&self, hash: &v2::StateHash) -> Result<v2::MinaBlockBlockStableV2, DbError> {
         let mut key = vec![];
         hash.binprot_write(&mut key).unwrap();
