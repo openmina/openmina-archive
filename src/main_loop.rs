@@ -67,7 +67,7 @@ pub async fn bootstrap(
         + DerefMut<Target = Swarm<B>>,
     db: Arc<Db>,
     tx: mpsc::UnboundedSender<SwarmEvent<BEvent, THandlerErr<B>>>,
-    head: String,
+    head: Option<String>,
 ) -> Result<(), DbError> {
     use mina_p2p_messages::rpc;
 
@@ -133,19 +133,21 @@ pub async fn bootstrap(
 
     let (_, head_hashes) = db.block(BlockId::Latest).next().unwrap()?;
 
-    let true_head = serde_json::from_str::<v2::StateHash>(&format!("\"{head}\"")).unwrap();
-    let mut prev = true_head;
-    while !head_hashes.contains(&prev) {
-        let blocks = client
-            .rpc::<rpc::GetTransitionChainV2>(vec![prev.inner().0.clone()])
-            .await
-            .unwrap()
-            .unwrap();
-        let block = blocks[0].clone();
-        log::info!("catchup {}", block.height());
-        let new = block.header.protocol_state.previous_state_hash.clone();
-        db.put_block(prev, block)?;
-        prev = new;
+    if let Some(head) = head {
+        let true_head = serde_json::from_str::<v2::StateHash>(&format!("\"{head}\"")).unwrap();
+        let mut prev = true_head;
+        while !head_hashes.contains(&prev) {
+            let blocks = client
+                .rpc::<rpc::GetTransitionChainV2>(vec![prev.inner().0.clone()])
+                .await
+                .unwrap()
+                .unwrap();
+            let block = blocks[0].clone();
+            log::info!("catchup {}", block.height());
+            let new = block.header.protocol_state.previous_state_hash.clone();
+            db.put_block(prev, block)?;
+            prev = new;
+        }
     }
 
     while let Some(event) = client.swarm.next().await {
@@ -155,7 +157,7 @@ pub async fn bootstrap(
     Ok(())
 }
 
-pub async fn run(swarm: Swarm<B>, db: Arc<Db>, head: String) -> Result<(), DbError> {
+pub async fn run(swarm: Swarm<B>, db: Arc<Db>, head: Option<String>) -> Result<(), DbError> {
     let (tx, mut rx) = mpsc::unbounded_channel();
 
     let trigger = Canceler::spawn({

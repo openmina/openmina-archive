@@ -33,7 +33,7 @@ struct Args {
     #[structopt(long)]
     peer: Vec<Multiaddr>,
     #[structopt(long)]
-    head: String,
+    head: Option<String>,
 }
 
 #[tokio::main]

@@ -31,7 +31,10 @@ spec:
           image: vladsimplestakingcom/openmina-archive:0.1
           command: ["sh", "-c"]
           args:
-            - openmina-archive --chain-id=3c41383994b87449625df91769dff7b507825c064287d30fada9286f3f1cb15e --path=/database --listen=/ip4/0.0.0.0/tcp/8302 --peer=/ip4/65.21.123.88/tcp/8302/p2p/12D3KooWLKSM9oHWU7qwL7Ci75wunkjXpRmK6j5xq527zGw554AF
+            - openmina-archive --chain-id=3c41383994b87449625df91769dff7b507825c064287d30fada9286f3f1cb15e --path=/database --listen=/ip4/0.0.0.0/tcp/8302 --peer=/ip4/65.21.123.88/tcp/8302/p2p/12D3KooWLKSM9oHWU7qwL7Ci75wunkjXpRmK6j5xq527zGw554AF --head 3NKyW1hojufAkwDznbN2BNxXUWAiffJwnMfUCva3JhwErrzMdHqx
+          env:
+            - name: RUST_LOG
+              value: info
           ports:
             - name: external-ip
               containerPort: 8302
