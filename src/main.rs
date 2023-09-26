@@ -9,6 +9,7 @@ mod main_loop;
 mod client;
 mod snarked_ledger;
 mod bootstrap;
+mod server;
 
 use std::{path::PathBuf, env, sync::Arc};
 
@@ -34,6 +35,8 @@ struct Args {
     peer: Vec<Multiaddr>,
     #[structopt(long)]
     head: Option<String>,
+    #[structopt(long)]
+    http: Option<u16>,
 }
 
 #[tokio::main]
@@ -46,6 +49,7 @@ async fn main() {
         listen,
         peer,
         head,
+        http,
     } = Args::from_args();
 
     let sk = env::var("OPENMINA_P2P_SEC_KEY")
@@ -73,6 +77,9 @@ async fn main() {
     );
 
     let db = Arc::new(db::Db::open(path).unwrap());
+    if let Some(port) = http {
+        server::spawn(db.clone(), port);
+    }
     if let Err(err) = main_loop::run(swarm, db, head).await {
         log::error!("fatal: {err}");
     }

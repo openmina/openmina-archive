@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
 
 use mina_p2p_messages::{rpc::GetStagedLedgerAuxAndPendingCoinbasesAtHashV2Response, v2};
 use mina_tree::{
@@ -13,6 +13,8 @@ use mina_tree::{
     },
 };
 use mina_signer::CompressedPubKey;
+
+use crate::db::BlockHeader;
 
 use super::{
     snarked_ledger::SnarkedLedger,
@@ -67,21 +69,46 @@ pub fn again(db: Arc<Db>) -> Result<(), DbError> {
         .blockchain_state
         .staged_ledger_hash
         .clone();
-    let mut storage = Storage::new(snarked_ledger.inner, info, expected_hash);
+    let storage = Storage::new(snarked_ledger.inner, info, expected_hash);
 
     log::info!("obtain staged ledger");
 
-    let mut last_protocol_state = last_protocol_state;
+    let mut ancestors = Some((root_block_hash.clone(), (last_protocol_state, storage)))
+        .into_iter()
+        .collect::<BTreeMap<_, _>>();
     for x in blocks {
         let (_, hashes) = x?;
-        let block = db.block_full(hashes.first().unwrap())?;
-        storage.apply_block(&block, &last_protocol_state);
-        last_protocol_state = block.header.protocol_state.clone();
+        let hashes = hashes.into_iter().collect::<BTreeSet<_>>();
+        let mut new_ancestors = BTreeMap::new();
+        for (prev_hash, (prev_protocol_state, storage)) in ancestors {
+            for hash in hashes.clone() {
+                let Ok(block) = db.block_full(&hash) else {
+                    continue;
+                };
+                if block
+                    .header
+                    .protocol_state
+                    .previous_state_hash
+                    .ne(&prev_hash)
+                {
+                    continue;
+                }
+                let mut storage = storage.clone();
+                log::info!(
+                    "will apply: {} prev: {prev_hash}, this: {hash}",
+                    block.height()
+                );
+                storage.apply_block(&block, &prev_protocol_state);
+                new_ancestors.insert(hash, (block.header.protocol_state.clone(), storage));
+            }
+        }
+        ancestors = new_ancestors;
     }
 
     Ok(())
 }
 
+#[derive(Clone)]
 pub struct Storage {
     staged_ledger: StagedLedger,
 }
@@ -130,19 +157,11 @@ impl Storage {
         block: &v2::MinaBlockBlockStableV2,
         prev_protocol_state: &v2::MinaStateProtocolStateValueStableV2,
     ) {
-        let length = block
-            .header
-            .protocol_state
-            .body
-            .consensus_state
-            .blockchain_length
-            .as_u32();
         let previous_state_hash = block.header.protocol_state.previous_state_hash.clone();
         let _previous_state_hash = v2::StateHash::from(v2::DataHashLibStateHashStableV1(
             prev_protocol_state.hash().inner().0.clone(),
         ));
         assert_eq!(previous_state_hash, _previous_state_hash);
-        log::info!("will apply: {length} prev: {previous_state_hash}");
 
         let global_slot = block
             .header
