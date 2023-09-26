@@ -1,6 +1,7 @@
 {
     "cSpell.words": [
         "Behaviour",
+        "Binable",
         "binprot",
         "Coinbases",
         "Deque",
@@ -15,6 +16,7 @@
         "rpcs",
         "snarked",
         "structopt",
-        "Substream"
+        "Substream",
+        "thiserror"
     ]
 }

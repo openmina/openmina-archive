@@ -1,19 +1,31 @@
-use std::{path::PathBuf, env};
+// TODO:
+// * cleanup unwraps
+// * handle requests
+// * add http from bootstrap from root
+// * implement `get_ancestry`
+
+mod db;
+mod main_loop;
+mod client;
+mod snarked_ledger;
+
+use std::{path::PathBuf, env, sync::Arc};
 
 use libp2p::{
     Multiaddr,
-    identity::ed25519::{SecretKey, Keypair},
+    identity::{
+        ed25519::{SecretKey, Keypair as EdKeypair},
+        Keypair,
+    },
 };
+
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
 struct Args {
-    #[structopt(long, default_value = "target/default")]
+    #[structopt(long)]
     path: PathBuf,
-    #[structopt(
-        long,
-        default_value = "3c41383994b87449625df91769dff7b507825c064287d30fada9286f3f1cb15e"
-    )]
+    #[structopt(long)]
     chain_id: String,
     #[structopt(long)]
     listen: Vec<Multiaddr>,
@@ -21,7 +33,8 @@ struct Args {
     peer: Vec<Multiaddr>,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init();
 
     let Args {
@@ -44,28 +57,19 @@ fn main() {
             sk
         });
 
-    let local_key: libp2p::identity::Keypair = Keypair::from(sk).into();
+    let local_key = Keypair::from(EdKeypair::from(sk));
     log::info!("{}", local_key.public().to_peer_id());
 
-    let swarm = {
-        use mina_p2p_messages::rpc::{
-            GetBestTipV2, GetAncestryV2, GetStagedLedgerAuxAndPendingCoinbasesAtHashV2,
-            AnswerSyncLedgerQueryV2, GetTransitionChainV2, GetTransitionChainProofV1ForV2,
-        };
-        use libp2p_rpc_behaviour::BehaviourBuilder;
+    let swarm = mina_transport::swarm(
+        local_key.clone(),
+        chain_id.as_bytes(),
+        listen,
+        peer,
+        main_loop::B::new(local_key),
+    );
 
-        let behaviour = BehaviourBuilder::default()
-            .register_method::<GetBestTipV2>()
-            .register_method::<GetAncestryV2>()
-            .register_method::<GetStagedLedgerAuxAndPendingCoinbasesAtHashV2>()
-            .register_method::<AnswerSyncLedgerQueryV2>()
-            .register_method::<GetTransitionChainV2>()
-            .register_method::<GetTransitionChainProofV1ForV2>()
-            .build();
-        mina_transport::swarm(local_key, chain_id.as_bytes(), listen, peer, behaviour)
-    };
-
-    // TODO: communicate peers, keep rocksdb updated
-    let _ = path;
-    let _ = swarm;
+    let db = Arc::new(db::Db::open(path).unwrap());
+    if let Err(err) = main_loop::run(swarm, db).await {
+        log::error!("fatal: {err}");
+    }
 }
