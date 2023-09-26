@@ -1,8 +1,6 @@
 // TODO:
 // * cleanup unwraps
-// * handle requests
-// * add http from bootstrap from root
-// * implement `get_ancestry`
+// * add http for test launch/stop/status
 
 mod db;
 mod main_loop;

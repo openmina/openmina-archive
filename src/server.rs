@@ -57,7 +57,16 @@ fn routes(
         move || -> reply::WithStatus<Json> {
             match db.root() {
                 None => reply::with_status(reply::json(&()), StatusCode::OK),
-                Some(Ok(root)) => reply::with_status(reply::json(&root), StatusCode::OK),
+                Some(Ok(root)) => match db.block(BlockId::Latest).next() {
+                    None => reply::with_status(reply::json(&()), StatusCode::OK),
+                    Some(Ok((head, _))) => {
+                        reply::with_status(reply::json(&(root, head)), StatusCode::OK)
+                    }
+                    Some(Err(err)) => reply::with_status(
+                        reply::json(&err.to_string()),
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    ),
+                },
                 Some(Err(err)) => reply::with_status(
                     reply::json(&err.to_string()),
                     StatusCode::INTERNAL_SERVER_ERROR,
