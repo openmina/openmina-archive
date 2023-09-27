@@ -31,7 +31,7 @@ spec:
           image: vladsimplestakingcom/openmina-archive:0.4
           command: ["sh", "-c"]
           args:
-            - openmina-archive --chain-id=3c41383994b87449625df91769dff7b507825c064287d30fada9286f3f1cb15e --path=/database --listen=/ip4/0.0.0.0/tcp/8302 --http 9000
+            - openmina-archive --chain-id=3c41383994b87449625df91769dff7b507825c064287d30fada9286f3f1cb15e --path=/database/db --listen=/ip4/0.0.0.0/tcp/8302 --http 9000
           env:
             - name: RUST_LOG
               value: info
@@ -44,6 +44,8 @@ spec:
               protocol: TCP
           volumeMounts:
           - mountPath: /database
-            name: openmina-archive-database
+            name: archive-database
       volumes:
-      - name: openmina-archive-database
+        - name: archive-database
+          persistentVolumeClaim:
+            claimName: archive-database-claim
