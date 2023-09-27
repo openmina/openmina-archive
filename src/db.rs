@@ -31,6 +31,8 @@ pub enum DbError {
     BlockNotFound(v2::StateHash),
     #[error("staged ledger aux info not found {_0}")]
     AuxNotFound(v2::StateHash),
+    #[error("root not found")]
+    RootNotFound,
 }
 
 pub enum BlockId {
@@ -87,8 +89,6 @@ impl Db {
             ColumnFamilyDescriptor::new("block", Default::default()),
             // u32 -> Vec<v2::StateHash>
             ColumnFamilyDescriptor::new("block_hash_by_height", Default::default()),
-            // u32
-            ColumnFamilyDescriptor::new("root", Default::default()),
         ];
 
         let inner = rocksdb::DB::open_cf_descriptors_with_ttl(&opts, path, cfs, Self::TTL)?;
@@ -99,13 +99,14 @@ impl Db {
         })
     }
 
-    pub fn root(&self) -> Option<Result<u32, DbError>> {
+    pub fn root(&self) -> Result<u32, DbError> {
         let cf = self.inner.cf_handle("ledger").expect("must exist");
 
         self.inner
             .iterator_cf(cf, rocksdb::IteratorMode::Start)
             .next()
-            .map(|r| {
+            .ok_or(DbError::RootNotFound)
+            .and_then(|r| {
                 r.map_err(Into::into).and_then(|(key, _)| {
                     key.as_ref()
                         .try_into()

@@ -70,7 +70,7 @@ pub async fn bootstrap(
 
     let mut client = Client::new(swarm, db.clone());
 
-    if db.root().is_none() {
+    if db.root().is_err() {
         let best_tip = client.rpc::<rpc::GetBestTipV2>(()).await.unwrap().unwrap();
 
         log::info!("best tip {}", best_tip.data.height());
@@ -119,14 +119,16 @@ pub async fn bootstrap(
         db.put_root(root)?;
     }
 
-    // TODO:
-    std::thread::spawn({
-        let db = db.clone();
-        move || {
-            log::info!("test...");
-            super::bootstrap::again(db).unwrap();
-        }
-    });
+    // TODO: move to another application
+    if false {
+        std::thread::spawn({
+            let db = db.clone();
+            move || {
+                log::info!("test...");
+                super::bootstrap::again(db).unwrap();
+            }
+        });
+    }
 
     loop {
         tokio::select! {

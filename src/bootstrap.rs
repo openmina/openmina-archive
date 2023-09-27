@@ -1,4 +1,7 @@
-use std::{collections::{BTreeMap, BTreeSet}, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use mina_p2p_messages::{rpc::GetStagedLedgerAuxAndPendingCoinbasesAtHashV2Response, v2};
 use mina_tree::{
@@ -35,13 +38,7 @@ pub const CONSTRAINT_CONSTANTS: ConstraintConstants = ConstraintConstants {
 };
 
 pub fn again(db: Arc<Db>) -> Result<(), DbError> {
-    let root = match db.root() {
-        Some(v) => v?,
-        None => {
-            log::info!("no root in database, run again later");
-            return Ok(());
-        }
-    };
+    let root = db.root()?;
 
     let mut blocks = db.block(BlockId::Forward(root));
 

@@ -28,7 +28,7 @@ spec:
     spec:
       containers:
         - name: openmina-archive
-          image: vladsimplestakingcom/openmina-archive:0.4
+          image: vladsimplestakingcom/openmina-archive:0.5
           command: ["sh", "-c"]
           args:
             - openmina-archive --chain-id=3c41383994b87449625df91769dff7b507825c064287d30fada9286f3f1cb15e --path=/database/db --listen=/ip4/0.0.0.0/tcp/8302 --http 9000

@@ -13,8 +13,7 @@ use libp2p_rpc_behaviour::{Event, StreamId, Received};
 use binprot::BinProtRead;
 use mina_p2p_messages::{
     rpc_kernel::{self, RpcMethod, ResponseHeader, ResponsePayload, QueryHeader},
-    rpc::GetBestTipV2,
-    v2,
+    rpc, v2,
 };
 
 use thiserror::Error;
@@ -117,18 +116,14 @@ where
                     Received::Query {
                         header: QueryHeader { tag, version, id },
                         bytes,
-                    } => {
-                        if tag.to_string_lossy() == "get_best_tip" && version == 2 {
-                            let _ = bytes;
-                            self.swarm
-                                .behaviour_mut()
-                                .rpc
-                                .respond::<GetBestTipV2>(peer_id, stream_id, id, Ok(None))
-                                .unwrap();
-                        } else {
-                            log::warn!("unhandled query: {tag} {version}");
-                        }
-                    }
+                    } => self.handle_incoming(
+                        peer_id,
+                        stream_id,
+                        id,
+                        &tag.to_string_lossy(),
+                        version,
+                        bytes,
+                    ),
                     Received::Response {
                         header: ResponseHeader { id },
                         bytes,
@@ -179,6 +174,48 @@ where
                 let hash = block.hash();
                 log::info!("block {height} {hash} from {source}");
                 self.db.put_block(hash, block).unwrap();
+            }
+        }
+    }
+
+    pub fn handle_incoming(
+        &mut self,
+        peer_id: PeerId,
+        stream_id: StreamId,
+        id: i64,
+        tag: &str,
+        version: i32,
+        bytes: Vec<u8>,
+    ) {
+        let mut slice = bytes.as_slice();
+        match (tag, version) {
+            (rpc::GetBestTipV2::NAME, rpc::GetBestTipV2::VERSION) => {
+                let _ = bytes;
+                self.swarm
+                    .behaviour_mut()
+                    .rpc
+                    .respond::<rpc::GetBestTipV2>(peer_id, stream_id, id, Ok(None))
+                    .unwrap();
+            }
+            (
+                rpc::GetStagedLedgerAuxAndPendingCoinbasesAtHashV2::NAME,
+                rpc::GetStagedLedgerAuxAndPendingCoinbasesAtHashV2::VERSION,
+            ) => {
+                let hash = BinProtRead::binprot_read(&mut slice).unwrap();
+                let aux = self.db.aux(&hash).unwrap();
+                self.swarm
+                    .behaviour_mut()
+                    .rpc
+                    .respond::<rpc::GetStagedLedgerAuxAndPendingCoinbasesAtHashV2>(
+                        peer_id,
+                        stream_id,
+                        id,
+                        Ok(aux),
+                    )
+                    .unwrap();
+            }
+            (tag, version) => {
+                log::warn!("unhandled query: {tag} {version}");
             }
         }
     }
