@@ -1,9 +1,6 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::Arc,
-};
+use std::collections::BTreeMap;
 
-use mina_p2p_messages::{rpc::GetStagedLedgerAuxAndPendingCoinbasesAtHashV2Response, v2};
+use mina_p2p_messages::{rpc::GetStagedLedgerAuxAndPendingCoinbasesAtHashV2Response as Aux, v2};
 use mina_tree::{
     mask::Mask,
     staged_ledger::{staged_ledger::StagedLedger, diff::Diff},
@@ -14,15 +11,9 @@ use mina_tree::{
         transaction_logic::{local_state::LocalState, protocol_state},
         self,
     },
+    Database, BaseLedger,
 };
 use mina_signer::CompressedPubKey;
-
-use crate::db::BlockHeader;
-
-use super::{
-    snarked_ledger::SnarkedLedger,
-    db::{Db, DbError, BlockId},
-};
 
 pub const CONSTRAINT_CONSTANTS: ConstraintConstants = ConstraintConstants {
     sub_windows_per_window: 11,
@@ -37,36 +28,36 @@ pub const CONSTRAINT_CONSTANTS: ConstraintConstants = ConstraintConstants {
     fork: None,
 };
 
-pub fn again(db: Arc<Db>) -> Result<(), DbError> {
-    let root = db.root()?;
+pub fn again(
+    accounts: Vec<v2::MinaBaseAccountBinableArgStableV2>,
+    aux: Aux,
+    mut blocks: impl Iterator<Item = Vec<v2::MinaBlockBlockStableV2>>,
+) {
+    let root_blocks = blocks.next().unwrap();
+    let root_block = root_blocks.first().unwrap();
+    let root_block_hash = root_block.hash();
 
-    let mut blocks = db.block(BlockId::Forward(root));
+    let last_protocol_state = root_block.header.protocol_state.clone();
 
-    let (_, root_block_hash) = blocks.next().unwrap()?;
+    let mut snarked_ledger = Mask::new_root(Database::create(35));
+    for account in accounts {
+        let account = mina_tree::Account::from(&account);
+        let account_id = account.id();
+        snarked_ledger
+            .get_or_create_account(account_id, account)
+            .unwrap();
+    }
 
-    let root_block_hash = root_block_hash.first().unwrap();
-    let root_block = db.block_full(&root_block_hash)?;
+    let _ = snarked_ledger.merkle_root();
 
-    let last_protocol_state = root_block.header.protocol_state;
-
-    let snarked_ledger_hash = last_protocol_state
-        .body
-        .blockchain_state
-        .ledger_proof_statement
-        .target
-        .first_pass_ledger
-        .clone();
-    let snarked_ledger =
-        SnarkedLedger::load_accounts(&snarked_ledger_hash, db.ledger(&snarked_ledger_hash)?);
-
-    let info = db.aux(&root_block_hash)?;
+    let info = aux;
 
     let expected_hash = last_protocol_state
         .body
         .blockchain_state
         .staged_ledger_hash
         .clone();
-    let storage = Storage::new(snarked_ledger.inner, info, expected_hash);
+    let storage = Storage::new(snarked_ledger, info, expected_hash);
 
     log::info!("obtain staged ledger");
 
@@ -74,14 +65,13 @@ pub fn again(db: Arc<Db>) -> Result<(), DbError> {
         .into_iter()
         .collect::<BTreeMap<_, _>>();
     for x in blocks {
-        let (_, hashes) = x?;
-        let hashes = hashes.into_iter().collect::<BTreeSet<_>>();
+        let hashes = x
+            .into_iter()
+            .map(|b| (b.hash(), b))
+            .collect::<BTreeMap<_, _>>();
         let mut new_ancestors = BTreeMap::new();
         for (prev_hash, (prev_protocol_state, storage)) in ancestors {
-            for hash in hashes.clone() {
-                let Ok(block) = db.block_full(&hash) else {
-                    continue;
-                };
+            for (hash, block) in hashes.clone() {
                 if block
                     .header
                     .protocol_state
@@ -91,18 +81,20 @@ pub fn again(db: Arc<Db>) -> Result<(), DbError> {
                     continue;
                 }
                 let mut storage = storage.clone();
-                log::info!(
-                    "will apply: {} prev: {prev_hash}, this: {hash}",
-                    block.height()
-                );
+                let height = block
+                    .header
+                    .protocol_state
+                    .body
+                    .consensus_state
+                    .blockchain_length
+                    .as_u32();
+                log::info!("will apply: {} prev: {prev_hash}, this: {hash}", height);
                 storage.apply_block(&block, &prev_protocol_state);
                 new_ancestors.insert(hash, (block.header.protocol_state.clone(), storage));
             }
         }
         ancestors = new_ancestors;
     }
-
-    Ok(())
 }
 
 #[derive(Clone)]
@@ -113,7 +105,7 @@ pub struct Storage {
 impl Storage {
     pub fn new(
         snarked_ledger: Mask,
-        info: GetStagedLedgerAuxAndPendingCoinbasesAtHashV2Response,
+        info: Aux,
         expected_hash: v2::MinaBaseStagedLedgerHashStableV1,
     ) -> Self {
         // TODO: fix for genesis block

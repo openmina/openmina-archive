@@ -47,27 +47,6 @@ impl SnarkedLedger {
         accounts.binprot_write(&mut writer)
     }
 
-    pub fn load_accounts(
-        top_hash: &v2::LedgerHash,
-        accounts: Vec<v2::MinaBaseAccountBinableArgStableV2>,
-    ) -> Self {
-        let num = accounts.len() as _;
-        let mut inner = Mask::new_root(Database::create(35));
-        for account in accounts {
-            let account = mina_tree::Account::from(&account);
-            let account_id = account.id();
-            inner.get_or_create_account(account_id, account).unwrap();
-        }
-
-        let _ = inner.merkle_root();
-
-        SnarkedLedger {
-            inner,
-            top_hash: Some(top_hash.clone()),
-            num,
-        }
-    }
-
     #[allow(dead_code)]
     pub fn load_bin<R>(mut reader: R) -> Result<Self, binprot::Error>
     where

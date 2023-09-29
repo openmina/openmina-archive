@@ -1,3 +1,6 @@
+[workspace]
+members = [".", "tester"]
+
 [package]
 name = "openmina-archive"
 version = "0.1.0"

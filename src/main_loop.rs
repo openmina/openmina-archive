@@ -6,12 +6,12 @@ use libp2p::{
     identity::Keypair,
     futures::{Stream, StreamExt},
 };
-use mina_tree::BaseLedger;
 use tokio::{sync::mpsc, signal};
 use vru_cancel::{Canceler, cancelable};
 
 use libp2p_rpc_behaviour::BehaviourBuilder;
 use mina_p2p_messages::v2;
+use mina_tree::BaseLedger;
 
 use super::{
     client::Client,
@@ -117,17 +117,6 @@ pub async fn bootstrap(
         }
 
         db.put_root(root)?;
-    }
-
-    // TODO: move to another application
-    if false {
-        std::thread::spawn({
-            let db = db.clone();
-            move || {
-                log::info!("test...");
-                super::bootstrap::again(db).unwrap();
-            }
-        });
     }
 
     loop {

@@ -6,7 +6,6 @@ mod db;
 mod main_loop;
 mod client;
 mod snarked_ledger;
-mod bootstrap;
 mod server;
 
 use std::{path::PathBuf, env, sync::Arc};

@@ -1,0 +1,29 @@
+kind: pipeline
+type: docker
+name: test-long-bootstrap
+
+trigger:
+  branch:
+  - main
+
+environment:
+  URL: http://1.k8.openmina.com:32056
+
+steps:
+  - name: build
+    image: rust:1.71-buster
+    environment:
+      GITHUB_AUTH_TOKEN:
+        from_secret: github_auth_token
+    commands:
+      - rustup update nightly-2023-06-01 && rustup default nightly-2023-06-01
+      - rustup component add rustfmt
+      - mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+      - git config --global url."https://$${GITHUB_AUTH_TOKEN}:@github.com/".insteadOf "https://github.com/"
+      - cargo update && cargo build --release -p openmina-archive-tester
+
+  - name: run
+    image: debian:buster
+    commands:
+      - apt-get update && apt-get install -y libssl-dev
+      - ./target/release/openmina-archive-tester --url=$URL apply

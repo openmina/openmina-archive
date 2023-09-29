@@ -1,0 +1,18 @@
+[package]
+name = "openmina-archive-tester"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = { version = "1.0" }
+structopt = { version = "0.3.26" }
+log = { version = "0.4.20" }
+env_logger = { version = "0.10.0" }
+
+serde_json = { version = "1.0" }
+reqwest = { version = "0.11.20", features = ["blocking"] }
+
+binprot = { git = "https://github.com/openmina/binprot-rs", rev = "dfbd3bbda8b2681d86ac73065523c658ee31d45d" }
+mina-tree = { git = "https://github.com/openmina/ledger", branch = "rampup4" }
+mina-signer = { git = "https://github.com/openmina/proof-systems", branch = "ledger-newtypes-rampup4" }
+mina-p2p-messages = { git = "https://github.com/openmina/mina-p2p-messages-rs", features = ["hashing"], rev = "e989a8957db0bde6007a8aceb39db409a9b0a308" }
