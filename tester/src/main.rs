@@ -1,8 +1,10 @@
 mod backup;
 mod bootstrap;
+mod inspect;
 
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration, io};
 
+use bytes::Bytes;
 use binprot::BinProtRead;
 use structopt::StructOpt;
 use reqwest::{Url, blocking::Client};
@@ -22,6 +24,7 @@ enum Command {
         path: PathBuf,
     },
     Apply,
+    Inspect,
 }
 
 fn main() {
@@ -29,6 +32,24 @@ fn main() {
 
     let Args { url, command } = Args::from_args();
 
+    let (ledger_bytes, blocks) = load(url);
+
+    match command {
+        Command::Backup { path } => backup::run(path, &ledger_bytes, blocks),
+        Command::Apply => {
+            let mut s = ledger_bytes.as_ref();
+            let (ledger, aux) = BinProtRead::binprot_read(&mut s).unwrap();
+            bootstrap::again(
+                ledger,
+                aux,
+                blocks.map(|mut reader| BinProtRead::binprot_read(&mut reader).unwrap()),
+            );
+        }
+        Command::Inspect => inspect::run(blocks),
+    }
+}
+
+fn load(url: Url) -> (Bytes, impl Iterator<Item = impl io::Read>) {
     let client = Client::builder()
         .timeout(Duration::from_secs(10))
         .build()
@@ -46,7 +67,7 @@ fn main() {
         .bytes()
         .unwrap();
 
-    let blocks = (root..head).map(|level| {
+    let blocks = (root..head).map(move |level| {
         let url = url
             .join("transitions/")
             .unwrap()
@@ -55,16 +76,5 @@ fn main() {
         client.get(url).send().unwrap()
     });
 
-    match command {
-        Command::Backup { path } => backup::run(path, &ledger_bytes, blocks),
-        Command::Apply => {
-            let mut s = ledger_bytes.as_ref();
-            let (ledger, aux) = BinProtRead::binprot_read(&mut s).unwrap();
-            bootstrap::again(
-                ledger,
-                aux,
-                blocks.map(|mut reader| BinProtRead::binprot_read(&mut reader).unwrap()),
-            );
-        }
-    }
+    (ledger_bytes, blocks)
 }

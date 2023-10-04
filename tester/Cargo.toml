@@ -11,6 +11,7 @@ env_logger = { version = "0.10.0" }
 
 serde_json = { version = "1.0" }
 reqwest = { version = "0.11.20", features = ["blocking"] }
+bytes = { version = "1.5" }
 
 binprot = { git = "https://github.com/openmina/binprot-rs", rev = "dfbd3bbda8b2681d86ac73065523c658ee31d45d" }
 mina-tree = { git = "https://github.com/openmina/ledger", branch = "rampup4" }

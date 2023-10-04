@@ -3151,6 +3151,7 @@ name = "openmina-archive-tester"
 version = "0.1.0"
 dependencies = [
  "binprot",
+ "bytes",
  "env_logger",
  "log",
  "mina-p2p-messages",
