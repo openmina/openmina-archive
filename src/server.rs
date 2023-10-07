@@ -108,7 +108,7 @@ fn routes(
         let db = db.clone();
         move || -> reply::WithStatus<Vec<u8>> {
             use std::collections::BTreeSet;
-            use binprot::BinProtWrite;
+            use mina_p2p_messages::binprot::BinProtWrite;
             use crate::db::BlockHeader;
 
             fn get(db: &Db) -> Result<impl BinProtWrite, DbError> {
@@ -146,7 +146,7 @@ fn routes(
     let get_transitions = warp::path!("transitions" / u32).and(warp::get()).map({
         let db = db.clone();
         move |height: u32| -> reply::WithStatus<Vec<u8>> {
-            use binprot::BinProtWrite;
+            use mina_p2p_messages::binprot::BinProtWrite;
 
             fn get(db: &Db, height: u32) -> Result<Option<impl BinProtWrite>, DbError> {
                 let Some((_, hashes)) = db.block(BlockId::Forward(height)).next().transpose()? else {

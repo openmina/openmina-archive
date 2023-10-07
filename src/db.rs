@@ -1,9 +1,9 @@
 use std::sync::Mutex;
 use std::{path::Path, time::Duration};
 
-use binprot::{BinProtWrite, BinProtRead};
 use rocksdb::{DBWithThreadMode, SingleThreaded, ColumnFamilyDescriptor};
 use thiserror::Error;
+use mina_p2p_messages::binprot::{self, BinProtWrite, BinProtRead};
 use mina_p2p_messages::v2;
 use mina_p2p_messages::rpc::GetStagedLedgerAuxAndPendingCoinbasesAtHashV2Response as Aux;
 

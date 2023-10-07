@@ -5,7 +5,7 @@ mod inspect;
 use std::{path::PathBuf, time::Duration, io};
 
 use bytes::Bytes;
-use binprot::BinProtRead;
+use mina_p2p_messages::binprot::BinProtRead;
 use structopt::StructOpt;
 use reqwest::{Url, blocking::Client};
 

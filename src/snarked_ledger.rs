@@ -1,10 +1,15 @@
 use std::{io, future::Future, pin::Pin, ops::DerefMut};
-use binprot::{BinProtWrite, BinProtRead};
+
 use thiserror::Error;
 
 use libp2p::futures::Stream;
 
-use mina_p2p_messages::{v2, rpc::AnswerSyncLedgerQueryV2, core::Info};
+use mina_p2p_messages::{
+    binprot::{self, BinProtWrite, BinProtRead},
+    v2,
+    rpc::AnswerSyncLedgerQueryV2,
+    core::Info,
+};
 use mina_tree::{Mask, Database, Account, BaseLedger, Address, AccountIndex};
 
 use super::client::{Client, TSwarmEvent, TSwarm};

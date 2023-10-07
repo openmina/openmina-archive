@@ -1,7 +1,6 @@
 use std::{io, collections::BTreeSet};
 
-use binprot::BinProtRead;
-use mina_p2p_messages::v2;
+use mina_p2p_messages::{v2, binprot::BinProtRead};
 
 pub fn run(blocks: impl Iterator<Item = impl io::Read>) {
     let blocks = blocks

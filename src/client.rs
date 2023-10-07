@@ -10,8 +10,8 @@ use libp2p::{
 };
 use libp2p_rpc_behaviour::{Event, StreamId, Received};
 
-use binprot::BinProtRead;
 use mina_p2p_messages::{
+    binprot::{self, BinProtRead},
     rpc_kernel::{self, RpcMethod, ResponseHeader, ResponsePayload, QueryHeader},
     rpc, v2,
 };
