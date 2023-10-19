@@ -1,6 +1,7 @@
 mod backup;
 mod bootstrap;
 mod inspect;
+mod catch;
 
 use std::{path::PathBuf, time::Duration, io};
 
@@ -25,6 +26,10 @@ enum Command {
     },
     Apply,
     Inspect,
+    Catch {
+        hash: String,
+        level: u32,
+    },
 }
 
 fn main() {
@@ -32,11 +37,13 @@ fn main() {
 
     let Args { url, command } = Args::from_args();
 
-    let (ledger_bytes, blocks) = load(url);
-
     match command {
-        Command::Backup { path } => backup::run(path, &ledger_bytes, blocks),
+        Command::Backup { path } => {
+            let (ledger_bytes, blocks) = load(url);
+            backup::run(path, &ledger_bytes, blocks)
+        }
         Command::Apply => {
+            let (ledger_bytes, blocks) = load(url);
             let mut s = ledger_bytes.as_ref();
             let (ledger, aux) = BinProtRead::binprot_read(&mut s).unwrap();
             bootstrap::again(
@@ -45,7 +52,11 @@ fn main() {
                 blocks.map(|mut reader| BinProtRead::binprot_read(&mut reader).unwrap()),
             );
         }
-        Command::Inspect => inspect::run(blocks),
+        Command::Inspect => {
+            let (_, blocks) = load(url);
+            inspect::run(blocks)
+        }
+        Command::Catch { hash, level } => catch::run(url, hash, level),
     }
 }
 

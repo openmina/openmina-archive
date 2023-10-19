@@ -22,6 +22,7 @@ pub fn run(blocks: impl Iterator<Item = impl io::Read>) {
                 has |= prev.contains(&block.header.protocol_state.previous_state_hash);
             }
             assert!(has, "breaks at {height}");
+            log::info!("ok {height}");
         }
         prev = level.iter().map(|b| b.hash()).collect();
     }
